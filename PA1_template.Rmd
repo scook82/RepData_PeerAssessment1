@@ -7,19 +7,97 @@ output:
 
 
 ## Loading and preprocessing the data
-
-
+```{r Loading_preprocessing_data, include=TRUE, echo=TRUE}
+dRaw <- read.csv(".\\activity\\activity.csv")  
+colnames(dRaw) <- c("steps", "date", "interval")  
+### get data without missing values into d
+d <- dRaw[!is.na(dRaw$steps),]  
+```
 
 ## What is mean total number of steps taken per day?
-
-
+```{r Mean_Num, include=TRUE, echo=TRUE}
+### get the number of steps taken each day into dSteps
+dSteps<-aggregate(d$steps, by=list(d$date), FUN=sum)  
+colnames(dSteps) <- c("date", "numSteps")  
+### histogram of number of steps
+hist(dSteps$numSteps, xlab="Avg # of Steps", main="Avg # Steps - Raw")  
+### mean and median of number of steps per day  
+meanSteps <- aggregate(d$steps, by=list(d$date), FUN=mean)      
+medianSteps <- aggregate(d$steps, by=list(d$date), FUN=median)  
+mmSteps <- cbind(meanSteps, medianSteps["x"])  
+colnames(mmSteps) <- c("date", "mean", "median")  
+mmSteps  
+```
 
 ## What is the average daily activity pattern?
-
-
+```{r What_Average_daily_Pattern, include=TRUE, echo=TRUE}
+### time series plot of the average steps taken per day
+dAvgStepsInt<-aggregate(d$steps, by=list(d$interval), FUN=mean)  
+colnames(dAvgStepsInt) <- c("interval", "avgSteps")  
+plot(x = dAvgStepsInt$interval, y = dAvgStepsInt$avgSteps, type="l"  
+      , xlab="Time Intervals"  
+      , ylab="Avg # of Steps"  
+      , main = "Average Steps per Day")  
+### which interval has the max number of steps?
+### NOTE: rounding to 5 digits so that we can get exact match without rounding errors
+dAvgStepsInt<- cbind(dAvgStepsInt, avgRnd=round(dAvgStepsInt$avgSteps, digits =5))  
+colnames(dAvgStepsInt) <- c("interval", "avgSteps", "avgRnd")  
+maxInterval <- subset(dAvgStepsInt, avgRnd == round(max(dAvgStepsInt$avgSteps), digits=5))  
+print(maxInterval["interval"])  
+```
 
 ## Imputing missing values
-
-
+```{r Imputing_missing_values, include=TRUE, echo=TRUE}
+### number of missing values
+missing <- dRaw[is.na(dRaw$steps),]  
+colnames(missing) <- c("steps", "date", "interval")  
+nrow(missing)  
+### fill in the missing values with the mean for that interval
+### get the set of missing values, and merge with mean for the interval
+merged<- merge(missing, dAvgStepsInt, by.x="interval", by.y="interval")  
+missingFilled <- subset(merged, select=c("avgSteps","date", "interval"))  
+colnames(missingFilled) <- c("steps", "date", "interval")  
+### bind our dataset without missing values, with the set of values we filled in that were missing
+fullD <- rbind(d, missingFilled)  
+colnames(fullD) <- c("steps", "date", "interval")  
+fullDSum<-aggregate(fullD$steps, by=list(fullD$date), FUN=sum)  
+colnames(fullDSum) <- c("date", "steps")  
+### draw graph in png
+hist(fullDSum$steps, xlab="Avg # of Steps", main="Avg # Steps - No Missing")  
+### mean and median of number of steps per day
+meanStepsFull <- aggregate(fullD$steps, by=list(fullD$date), FUN=mean)      
+medianStepsFull <- aggregate(fullD$steps, by=list(fullD$date), FUN=median)  
+mmStepsFull <- cbind(meanStepsFull, medianStepsFull["x"]) 
+colnames(mmStepsFull) <- c("date", "mean", "median")  
+mmStepsFull  
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
+```{r Are_there_differences_in_weekdays_weekends, include=TRUE, echo=TRUE}
+### convert to proper date format
+fullD["date"] <- as.Date(fullD$date, format = "%Y-%m-%d")  
+fullDWeek <- cbind(fullD, wd = weekdays(fullD$date), wdf = weekdays(fullD$date))  
+### function to identify weekday
+fn_IsWeekday <- function(x){  
+  f<- "0"  
+  if(x == "Monday" || x== "Tuesday" || x== "Wednesday" || x== "Thursday" || x== "Friday"){  
+    f<-"1"  
+  }  
+  f  
+}  
+### identify weekends and weekdays
+fullDWeek["wdf"] <- apply(fullDWeek["wdf"], 1, fn_IsWeekday)  
+### create a factor variable for weekdays and weekends
+fullDWeek["wdf"] <- factor(fullDWeek$wdf, level=c(1,0), labels = c("weekday", "weekend"))  
+### get the avg number of steps for weekends and weekdays into fullDWeekAvg
+fullDWeekAvg <- aggregate(fullDWeek$steps, by=list(fullDWeek$wdf, fullDWeek$interval), mean)  
+colnames(fullDWeekAvg) <- c("wdf", "interval", "avgSteps")  
+### plot Average Num of Steps for Weekdays and Weekends on the same device
+library("lattice")  
+xyplot(as.numeric(fullDWeekAvg$avgSteps) ~ as.numeric(fullDWeekAvg$interval) | fullDWeekAvg$wdf  
+       , panel=panel.xyplot, type="l"  
+       , main="Avg Steps per Interval"  
+       , ylab="Avg # of Steps"  
+       , xlab="Interval")  
+```
+
